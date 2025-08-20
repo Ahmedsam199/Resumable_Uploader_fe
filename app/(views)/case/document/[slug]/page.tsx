@@ -9,6 +9,11 @@ import { FolderClosed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DocumentForm from "./DocumentForm";
 import FilesModal from "./folderModal";
+export const getDate = (date: string): string | null => {
+  const newDate = new Date(date);
+
+  return newDate.toISOString().replace("T", " ").slice(0, -5);
+};
 export default function Page() {
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(false);
@@ -75,9 +80,14 @@ export default function Page() {
           className="hover:bg-amber-50 hover:scale-101 transition-all  duration-300 cursor-pointer"
         >
           <CardHeader>
-            <CardTitle className="flex items-center text-center space-x-2">
+            <CardTitle className="flex  space-x-2">
               <FolderClosed />
-              <span>{document.name}</span>
+              <div className="flex flex-col -row-start-1 gap-1">
+                <span>{document.name}</span>
+                <div>
+                  <span>{getDate(document.postingDate)}</span>
+                </div>
+              </div>
             </CardTitle>
           </CardHeader>
         </Card>

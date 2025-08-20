@@ -13,7 +13,7 @@ import {
 import { DocuemntDTO } from "@/Schemas/document/document.DTO";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { FormProvider, useForm } from "react-hook-form";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Routes from "@/Routes.json";
 import axios from "axios";
 
@@ -22,8 +22,15 @@ import {
   DropzoneContent,
   DropzoneEmptyState,
 } from "@/components/ui/shadcn-io/dropzone";
-import { Card, CardContent } from "@/components/ui/card";
-import { File, CheckCircle, AlertCircle, Pause, Play } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  File,
+  CheckCircle,
+  AlertCircle,
+  Pause,
+  Play,
+  ExternalLink,
+} from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 interface FilesModalProps {
@@ -51,9 +58,37 @@ const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
 const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
   const [fileStates, setFileStates] = useState<FileUploadState[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [oldFiles, setOldFiles] = useState([]);
+
+  // Use refs to store current file states for real-time access in async functions
+  const fileStatesRef = useRef<FileUploadState[]>([]);
+  const pauseFlags = useRef<boolean[]>([]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    fileStatesRef.current = fileStates;
+    pauseFlags.current = fileStates.map((state) => state.isPaused);
+  }, [fileStates]);
+
+  const fetchFiles = async () => {
+    const { data } = await axios.get(
+      `${Routes.document}/${modalState?.data?.id}`
+    );
+    setOldFiles(data.File);
+  };
+
+  useEffect(() => {
+    if (modalState?.data?.id) {
+      fetchFiles();
+    }
+  }, [modalState?.data?.id]);
 
   const handleClose = () => {
     setModalState({ open: false });
+  };
+
+  const handleFileClick = (fileLink) => {
+    window.open(fileLink, "_blank");
   };
 
   const updateFileState = (
@@ -112,8 +147,9 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
   };
 
   const uploadSingleFile = async (fileIndex: number) => {
-    const fileState = fileStates[fileIndex];
-    if (!fileState || fileState.isPaused) return;
+    // Get current file state from ref for real-time data
+    const fileState = fileStatesRef.current[fileIndex];
+    if (!fileState) return;
 
     try {
       updateFileState(fileIndex, { status: "uploading", error: undefined });
@@ -122,7 +158,11 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
       if (!fileState.uploadId) {
         const uploadData = await startUploadingFile(fileState.file.name);
         updateFileState(fileIndex, { uploadId: uploadData.uploadId });
-        fileState.uploadId = uploadData.uploadId;
+        // Update the ref as well
+        fileStatesRef.current[fileIndex] = {
+          ...fileStatesRef.current[fileIndex],
+          uploadId: uploadData.uploadId,
+        };
       }
 
       const file = fileState.file;
@@ -132,6 +172,8 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
 
       // Keep track of parts in local variable to avoid state update issues
       let uploadedParts = [...fileState.parts];
+      const currentUploadId =
+        fileState.uploadId || fileStatesRef.current[fileIndex].uploadId;
 
       // Upload chunks starting from current part
       for (
@@ -139,9 +181,8 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
         partNumber <= totalParts;
         partNumber++
       ) {
-        // Check if paused by getting fresh state
-        const currentState = fileStates[fileIndex];
-        if (currentState.isPaused) {
+        // Check pause flag using ref for real-time status
+        if (pauseFlags.current[fileIndex]) {
           updateFileState(fileIndex, { status: "paused" });
           return;
         }
@@ -152,10 +193,16 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
 
         const chunkResult = await uploadChunk(
           file.name,
-          fileState.uploadId!,
+          currentUploadId!,
           partNumber,
           chunk
         );
+
+        // Check again after async operation
+        if (pauseFlags.current[fileIndex]) {
+          updateFileState(fileIndex, { status: "paused" });
+          return;
+        }
 
         // Update local parts array
         uploadedParts[partNumber - 1] = {
@@ -172,9 +219,15 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
         });
       }
 
+      // Final check before completing
+      if (pauseFlags.current[fileIndex]) {
+        updateFileState(fileIndex, { status: "paused" });
+        return;
+      }
+
       // Complete the upload with the local parts array
       console.log("Completing upload with parts:", uploadedParts);
-      await completeUpload(file.name, fileState.uploadId!, uploadedParts);
+      await completeUpload(file.name, currentUploadId!, uploadedParts);
 
       updateFileState(fileIndex, {
         status: "completed",
@@ -182,10 +235,12 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
       });
     } catch (error) {
       console.error("Upload error:", error);
-      updateFileState(fileIndex, {
-        status: "error",
-        error: error.response?.data?.message || "Upload failed",
-      });
+      pauseUpload(fileIndex);
+      updateFileState(fileIndex, { isPaused: true, status: "paused" });
+      // updateFileState(fileIndex, {
+      //   status: "error",
+      //   error: error.response?.data?.message || "Upload failed",
+      // });
     }
   };
 
@@ -203,13 +258,16 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
     }
 
     setIsUploading(false);
+    fetchFiles();
   };
 
   const pauseUpload = (index: number) => {
+    pauseFlags.current[index] = true;
     updateFileState(index, { isPaused: true, status: "paused" });
   };
 
   const resumeUpload = async (index: number) => {
+    pauseFlags.current[index] = false;
     updateFileState(index, { isPaused: false });
     await uploadSingleFile(index);
   };
@@ -226,10 +284,17 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
     }));
 
     setFileStates((prev) => [...prev, ...newFileStates]);
+
+    pauseFlags.current = [
+      ...pauseFlags.current,
+      ...newFileStates.map(() => false),
+    ];
   };
 
   const removeFile = (index: number) => {
     setFileStates((prev) => prev.filter((_, i) => i !== index));
+
+    pauseFlags.current = pauseFlags.current.filter((_, i) => i !== index);
   };
 
   const getStatusIcon = (status: string) => {
@@ -278,7 +343,7 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[800px]">
+        <DialogContent className="min-w-[900px] w-full h-[600px] overflow-y-auto">
           <div>
             <h1 className="text-1xl font-bold tracking-tight mb-2">
               Files for document: {modalState?.data?.name}
@@ -397,13 +462,60 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
 
                 <Button
                   variant="outline"
-                  onClick={() => setFileStates([])}
+                  onClick={() => {
+                    setFileStates([]);
+                    pauseFlags.current = [];
+                  }}
                   disabled={isUploading}
                 >
                   Clear All
                 </Button>
               </div>
             )}
+          </div>
+          <hr />
+          <div>
+            Saved Files
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {oldFiles?.map((file) => {
+                const displayName =
+                  file.name.length > 15
+                    ? file.name.slice(0, 15) + "..."
+                    : file.name;
+
+                return (
+                  <Card
+                    key={file.id}
+                    className="cursor-pointer hover:shadow-lg transition-shadow duration-200 hover:bg-gray-50 border border-gray-200"
+                    onClick={() => handleFileClick(file.fileLink)}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-lg">
+                        <div className="flex items-center gap-3">
+                          <span>{displayName}</span>
+                        </div>
+                        <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-sm text-gray-600">
+                          <span>Type:</span>
+                          <span className="font-medium">
+                            {file.contentType}
+                          </span>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs text-gray-500">
+                            Click to open file
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
