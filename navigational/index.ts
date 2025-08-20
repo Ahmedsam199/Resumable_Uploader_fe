@@ -8,7 +8,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   {
     title: "Case",
-    href: "/case",
+    href: "/",
     icon: Gauge,
   },
 ];
