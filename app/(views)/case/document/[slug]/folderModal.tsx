@@ -30,6 +30,7 @@ import {
   Pause,
   Play,
   ExternalLink,
+  Loader,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
@@ -59,7 +60,7 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
   const [fileStates, setFileStates] = useState<FileUploadState[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [oldFiles, setOldFiles] = useState([]);
-
+  const [loading, setLoading] = useState(false);
   // Use refs to store current file states for real-time access in async functions
   const fileStatesRef = useRef<FileUploadState[]>([]);
   const pauseFlags = useRef<boolean[]>([]);
@@ -71,10 +72,14 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
   }, [fileStates]);
 
   const fetchFiles = async () => {
-    const { data } = await axios.get(
-      `${Routes.document}/${modalState?.data?.id}`
-    );
-    setOldFiles(data.File);
+    setLoading(true);
+    try {
+      const { data } = await axios.get(
+        `${Routes.document}/${modalState?.data?.id}`
+      );
+      setOldFiles(data.File);
+    } catch (error) {}
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -474,49 +479,55 @@ const FilesModal = ({ modalState, setModalState }: FilesModalProps) => {
             )}
           </div>
           <hr />
-          <div>
+          <center>
             Saved Files
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {oldFiles?.map((file) => {
-                const displayName =
-                  file.name.length > 15
-                    ? file.name.slice(0, 15) + "..."
-                    : file.name;
+            {loading && (
+              <center className="mt-5">
+                <Loader />
+              </center>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 center">
+              {!loading &&
+                oldFiles?.map((file) => {
+                  const displayName =
+                    file.name.length > 15
+                      ? file.name.slice(0, 15) + "..."
+                      : file.name;
 
-                return (
-                  <Card
-                    key={file.id}
-                    className="cursor-pointer hover:shadow-lg transition-shadow duration-200 hover:bg-gray-50 border border-gray-200"
-                    onClick={() => handleFileClick(file.fileLink)}
-                  >
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center justify-between text-lg">
-                        <div className="flex items-center gap-3">
-                          <span>{displayName}</span>
+                  return (
+                    <Card
+                      key={file.id}
+                      className="cursor-pointer hover:shadow-lg transition-shadow duration-200 hover:bg-gray-50 border border-gray-200"
+                      onClick={() => handleFileClick(file.fileLink)}
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center justify-between text-lg">
+                          <div className="flex items-center gap-3">
+                            <span>{displayName}</span>
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-sm text-gray-600">
+                            <span>Type:</span>
+                            <span className="font-medium">
+                              {file.contentType}
+                            </span>
+                          </div>
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500">
+                              Click to open file
+                            </p>
+                          </div>
                         </div>
-                        <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-sm text-gray-600">
-                          <span>Type:</span>
-                          <span className="font-medium">
-                            {file.contentType}
-                          </span>
-                        </div>
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <p className="text-xs text-gray-500">
-                            Click to open file
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
             </div>
-          </div>
+          </center>
         </DialogContent>
       </Dialog>
     </>
