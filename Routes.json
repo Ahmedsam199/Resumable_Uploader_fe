@@ -1,3 +1,9 @@
 {
-  "case": "http://localhost:3000/case"
+  "case": "http://localhost:3000/case",
+  "document": "http://localhost:3000/document",
+  "fileUpload": {
+    "startUpload": "http://localhost:3000/files/start-upload",
+    "upload": "http://localhost:3000/files/upload",
+    "completeUpload": "http://localhost:3000/files/complete-upload"
+  }
 }

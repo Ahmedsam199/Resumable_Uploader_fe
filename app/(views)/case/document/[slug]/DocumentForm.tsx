@@ -10,26 +10,30 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CaseDTO } from "@/Schemas/Case/Case.DTO";
+import { DocuemntDTO } from "@/Schemas/document/document.DTO";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { FormProvider, useForm } from "react-hook-form";
 import { useState, useEffect } from "react";
 import Routes from "@/Routes.json";
 import axios from "axios";
 
-interface CaseFormProps {
+interface DocumentFormProps {
   modalState: {
     open: boolean;
     data?: any;
   };
   setModalState: (state: { open: boolean; data?: any }) => void;
-  tableRef: any;
+  refresh: any;
 }
 
-const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
+const DocumentForm = ({
+  refresh,
+  modalState,
+  setModalState,
+}: DocumentFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isEditMode = !!modalState.data;
+  const isEditMode = !!modalState?.data?.id;
 
   const handleClose = () => {
     setModalState({ open: false });
@@ -37,7 +41,7 @@ const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
   };
 
   const methods = useForm({
-    resolver: yupResolver(CaseDTO),
+    resolver: yupResolver(DocuemntDTO),
     defaultValues: {
       id: null,
       name: "",
@@ -65,6 +69,7 @@ const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
   }, [modalState.data, reset]);
 
   const onSubmit = async (values: any) => {
+    values.caseId = +modalState.data.caseId;
     setIsSubmitting(true);
 
     try {
@@ -73,15 +78,15 @@ const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
       if (isEditMode) {
         return;
       } else {
-        const { id, ...caseData } = values;
-        response = await axios.post(Routes.case, caseData);
+        const { id, ...documentDate } = values;
+        response = await axios.post(Routes.document, documentDate);
       }
 
       handleClose();
-      tableRef.current?.refetch();
+      refresh?.();
 
       console.log(
-        `Case ${isEditMode ? "updated" : "created"} successfully:`,
+        `Document ${isEditMode ? "updated" : "created"} successfully:`,
         response.data
       );
     } catch (error: any) {
@@ -112,14 +117,12 @@ const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
           <FormProvider {...methods}>
             <form onSubmit={methods.handleSubmit(onSubmit)}>
               <DialogHeader>
-                <DialogTitle>
-                  {isEditMode ? "Edit Case" : "Add New Case"}
-                </DialogTitle>
-                <DialogDescription>Casees</DialogDescription>
+                <DialogTitle>{"Add New Document"}</DialogTitle>
+                <DialogDescription>Document</DialogDescription>
               </DialogHeader>
 
               <div className="grid gap-4">
-                <FormInput label="Name" name="name" disabled={isEditMode} />
+                <FormInput label="Name" name="name" />
               </div>
 
               <DialogFooter className="mt-5">
@@ -132,17 +135,17 @@ const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
                     Cancel
                   </Button>
                 </DialogClose>
-                {!isEditMode && (
+                {
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting
-                      ? isEditMode
+                      ? !isEditMode
                         ? "Updating..."
                         : "Saving..."
                       : isEditMode
                       ? "Update"
                       : "Save"}
                   </Button>
-                )}
+                }
               </DialogFooter>
             </form>
           </FormProvider>
@@ -152,4 +155,4 @@ const CaseForm = ({ tableRef, modalState, setModalState }: CaseFormProps) => {
   );
 };
 
-export default CaseForm;
+export default DocumentForm;

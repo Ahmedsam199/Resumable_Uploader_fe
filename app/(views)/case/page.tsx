@@ -6,14 +6,12 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTable, DataTableRef } from "@/components/ui/DataTable";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Routes from "@/Routes.json";
-
-import { Eye } from "lucide-react";
-
+import { Eye, Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CaseForm from "./CaseForm";
 
 type Data = {
-  ID: number;
+  id: number;
 };
 
 export default function CasesPage() {
@@ -23,6 +21,7 @@ export default function CasesPage() {
     open: false,
     data: null,
   });
+
   const [search, setSearch] = useState<any>({
     search: "",
   });
@@ -37,18 +36,17 @@ export default function CasesPage() {
       enableResizing: true,
       cell: ({ row }) => (
         <div className="flex gap-2">
-          <Button
-            variant="default"
-            size="icon"
-            type="button"
-            aria-label="Edit"
-            className="hover:scale-105"
-            onClick={() => {
-              setModalState({ open: true, data: row.original });
-            }}
-          >
-            <Eye size={14} />
-          </Button>
+          <a href={`/case/document/${row.original.id}`}>
+            <Button
+              variant="default"
+              size="icon"
+              type="button"
+              aria-label="Edit"
+              className="hover:scale-105"
+            >
+              <Folder size={14} />
+            </Button>
+          </a>
         </div>
       ),
     },
